@@ -1,0 +1,120 @@
+version: '3'
+services:
+
+  # POSTGRES DB
+  postgres-db:
+    image: postgres:13.2
+    container_name: postgres_mlflow_v2
+    environment:
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      POSTGRES_MULTIPLE_DATABASES: "${MLFLOW_POSTGRES_DB}"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: UTC
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./pg-init-scripts:/docker-entrypoint-initdb.d
+    expose:
+      - ${POSTGRES_PORT}
+    ports:
+      - ${POSTGRES_PORT}:5432
+    networks:
+      - wine-network
+    restart: always
+
+  base:
+    image: wine_base_v2
+    container_name: base_v2
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    depends_on:
+        - postgres-db
+    command: bash -c "poetry run python -m ipykernel install --user --name=mlflow-py3.9 && 
+      poetry run jupyter lab --no-browser
+      --allow-root --ip 0.0.0.0 --NotebookApp.token=''
+      --port=${JUPYTER_PORT} && poetry run jupyter nbextension enable --py
+      --sys-prefix qgrid"
+    tty: true
+    ports:
+      - ${JUPYTER_PORT}:${JUPYTER_PORT}
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      MLFLOW_ARTIFACT_ROOT: ${MLFLOW_ARTIFACT_ROOT}
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_TRACKING_USER}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_TRACKING_PASSWORD}
+      MLFLOW_SERVER_HOST: ${MLFLOW_SERVER_HOST}
+      MLFLOW_SERVER_PORT: ${MLFLOW_SERVER_PORT}
+    volumes:
+        - ./:/wine/
+        - type: bind
+          source: ./.env
+          target: /wine/.env
+    networks:
+        - wine-network
+
+  # MLFLOW SERVER
+  mlflow-server:
+    image: wine_base_v2
+    container_name: mlflow_server_v2
+    ports:
+      - ${MLFLOW_SERVER_PORT}:${MLFLOW_SERVER_PORT}
+    environment:
+      DB_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_mlflow_v2:5432/${MLFLOW_POSTGRES_DB}
+      MLFLOW_ARTIFACT_ROOT: ${MLFLOW_ARTIFACT_ROOT}
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_TRACKING_USER}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_TRACKING_PASSWORD}
+      MLFLOW_SERVER_HOST: ${MLFLOW_SERVER_HOST}
+      MLFLOW_SERVER_PORT: ${MLFLOW_SERVER_PORT}
+      TZ: UTC
+    restart: always
+    volumes:
+      - type: bind
+        source: ./
+        target: /wine/
+      - type: bind
+        source: ./.env
+        target: /wine/.env
+    entrypoint: bash /wine/start_mlflow_server.sh
+    networks:
+      - wine-network
+
+  # MLFLOW UI
+  mlflow-ui:
+    image: wine_base_v2
+    container_name: mlflow_ui_v2
+    ports:
+      - ${MLFLOW_UI_PORT}:${MLFLOW_UI_PORT}
+    environment:
+      DB_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_mlflow_v2:5432/${MLFLOW_POSTGRES_DB}
+      MLFLOW_ARTIFACT_ROOT: ${MLFLOW_ARTIFACT_ROOT}
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_TRACKING_USER}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_TRACKING_PASSWORD}
+      MLFLOW_UI_HOST: ${MLFLOW_UI_HOST}
+      MLFLOW_UI_PORT: ${MLFLOW_UI_PORT}
+      TZ: UTC
+    restart: always
+    depends_on:
+      - mlflow-server
+    volumes:
+      - type: bind
+        source: ./
+        target: /wine/
+      - type: bind
+        source: ./.env
+        target: /wine/.env
+    entrypoint: bash /wine/start_mlflow_ui.sh
+    networks:
+      - wine-network
+
+# VOLUMES
+volumes:
+  postgres-data:
+
+# NETWORKS
+networks:
+  wine-network:
+    ipam:
+      driver: default
+      config:
+          - subnet: ${IP_SUBNET}/16
