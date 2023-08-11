@@ -82,10 +82,11 @@ if __name__ == "__main__":
         mlflow.sklearn.log_model(lr, "model")
         # Create and save simple plot
         params = {"xlabel": "Predicted Quality", "title": "Prediction Distribution"}
+        CODE_PATH = cfg.OUTPUT_PATH / "code"
         plot_normalized_distplot(
             predicted_qualities,
-            save_path=cfg.OUTPUT_PATH / "pred_displot.png",
+            save_path=CODE_PATH / "pred_displot.png",
             **params
         )
         # Upload all contents of ./outputs to tracking server
-        mlflow.log_artifacts(cfg.OUTPUT_PATH, artifact_path="artifacts")
+        mlflow.log_artifacts(CODE_PATH, artifact_path="artifacts")

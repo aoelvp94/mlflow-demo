@@ -42,5 +42,6 @@ docker exec -it base_v2 poetry run python train.py --alpha=2 --l1-ratio=0.2
 ```
 You can try other values for `alpha` and `l1-ratio` parameters to interact with MLFlow service.
 
-5. Go to http://localhost:88/ to see your new experiment and your runs.
+5. Go to http://localhost:89/ to see your new experiment and your runs.
    
+If you want to run new experiments on JupyterLab, just go to http://localhost:8877/
